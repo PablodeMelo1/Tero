@@ -50,7 +50,7 @@ flowchart TD
 | Calidad | SonarCloud, espera de su gate y validación adicional de métricas |
 | SAST | Semgrep, reglas locales versionadas en `.semgrep.yml` |
 | Secretos en Git y archivos | Gitleaks, historial completo y árbol de trabajo, valores redactados |
-| Dependencias e imágenes | Trivy; Dependabot abre PR de mantenimiento |
+| Dependencias e imágenes | Trivy en modo filesystem e image |
 | Dockerfiles e IaC | Checkov |
 | DAST | OWASP ZAP baseline sobre UI y admin de Test |
 | Registro | Docker Hub, seis repositorios `USUARIO/tero-SERVICIO` |
@@ -89,8 +89,7 @@ afirma que la aplicación existente tenga 80 % de cobertura global.
 
 ZAP ejecuta un escaneo pasivo y anónimo: no reemplaza un pentest ni prueba las
 rutas autenticadas del admin. Se conservan los reportes y se bloquean los hallazgos
-High; Low/Medium quedan visibles. Dependabot monitorea y propone actualizaciones;
-el gate ejecutable de dependencias es Trivy.
+High; Low/Medium quedan visibles. El gate ejecutable de dependencias es Trivy.
 
 ## Configuración inicial de GitHub y Docker Hub
 
@@ -146,14 +145,10 @@ el gate ejecutable de dependencias es Trivy.
 
 6. Proteger `main`: exigir PR y el check **Required CI gate** del workflow
    principal. Elegirlo después de la primera ejecución; ese job también falla si
-   cualquiera de las etapas anteriores quedó salteada. Activar Dependabot alerts
-   y security updates en Settings → Code security; `.github/dependabot.yml`
-   configura las revisiones periódicas de paquetes, imágenes y acciones.
+   cualquiera de las etapas anteriores quedó salteada.
 
 Los PR desde forks no reciben `SONAR_TOKEN`: el análisis de calidad falla cerrado.
 No se usa `pull_request_target` para ejecutar código no confiable con secretos.
-Para analizar los PR de Dependabot, configurar también `SONAR_TOKEN` en los
-secrets de Dependabot; GitHub los administra por separado de los de Actions.
 
 ## Preparación de los servidores
 
@@ -283,10 +278,9 @@ ocultar esos hallazgos.
 
 ## Mantenimiento de dependencias
 
-Dependabot agrupa propuestas relacionadas y limita los PRs de versiones por
-entrada de configuración. Las migraciones mayores se revisan por separado;
-los controles de Trivy siguen bloqueando HIGH/CRITICAL, incluidos los que no
-tienen parche.
+Las actualizaciones de dependencias se realizan mediante ramas y PRs del equipo.
+Las migraciones mayores se revisan por separado; los controles de Trivy siguen
+bloqueando HIGH/CRITICAL, incluidos los que no tienen parche.
 
 Checkout usa TypeScript directamente para compilar, sin Nest CLI, Webpack ni
 las herramientas de generación que el servicio no utiliza. El lockfile se
