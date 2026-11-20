@@ -62,13 +62,13 @@ jobs:
           SERVICE: ${{ matrix.service }}
           RELEASE_SHA: ${{ github.sha }}
         run: docker save "tero-$SERVICE:$RELEASE_SHA" -o image.tar
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: container-${{ matrix.service }}
           path: image.tar
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: scan-${{ matrix.service }}
@@ -95,7 +95,7 @@ jobs:
         env:
           RELEASE_SHA: ${{ github.sha }}
         run: bash scripts/ci-stack.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: integration-reports
@@ -145,7 +145,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           RELEASE_SHA: ${{ github.sha }}
         run: python3 scripts/publish.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release
           path: release/manifest.json
