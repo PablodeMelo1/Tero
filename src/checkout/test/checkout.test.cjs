@@ -39,3 +39,22 @@ test('preserves checkout if the orders service fails', async () => {
   await assert.rejects(service.submit('customer'), /orders unavailable/);
   assert.ok(await service.get('customer'));
 });
+
+test('boots Nest providers from the TypeScript build with decorator metadata', async t => {
+  const settings = ['RETAIL_CHECKOUT_PERSISTENCE_PROVIDER', 'RETAIL_CHECKOUT_ENDPOINTS_ORDERS'];
+  const previous = settings.map(key => process.env[key]);
+  process.env.RETAIL_CHECKOUT_PERSISTENCE_PROVIDER = 'in-memory';
+  process.env.RETAIL_CHECKOUT_ENDPOINTS_ORDERS = '';
+  t.after(() => settings.forEach((key, index) => {
+    if (previous[index] === undefined) delete process.env[key];
+    else process.env[key] = previous[index];
+  }));
+  const { NestFactory } = require('@nestjs/core');
+  const { AppModule } = require('../dist/app.module');
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
+  t.after(() => app.close());
+  const service = app.get(CheckoutService);
+  const checkout = await service.update('bootstrap-test', { items: [item] });
+  assert.equal(checkout.total, 36);
+  assert.equal((await service.get('bootstrap-test')).subtotal, 36);
+});

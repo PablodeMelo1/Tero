@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn/releases .yarn/releases
 RUN node .yarn/releases/yarn-4.11.0.cjs install --immutable
-COPY tsconfig*.json nest-cli.json ./
+COPY tsconfig*.json ./
 COPY src ./src
 RUN node .yarn/releases/yarn-4.11.0.cjs build
 RUN node .yarn/releases/yarn-4.11.0.cjs workspaces focus --production

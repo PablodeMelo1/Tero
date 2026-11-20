@@ -37,3 +37,13 @@ y repetir los escaneos antes de intentar publicar una release.
 Queda por verificar contra servicios reales: análisis y métricas de SonarCloud,
 publicación en Docker Hub, reglas de los GitHub Environments, SSH y despliegues
 remotos. Los archivos y comandos de configuración están en [ci-cd.md](ci-cd.md).
+
+## Revisión del hallazgo de SonarCloud sobre el reporte de métricas — 20/11/2026
+
+Hallazgo: `Path Traversal via file content in sonar_gate.main()`. Se propone
+clasificarlo como **False positive**: la respuesta HTTP es contenido JSON y
+no interviene en la ruta literal `reports/sonar-measures.json`
+([CWE-22](https://cwe.mitre.org/data/definitions/22.html)). No se suprimió la regla.
+`tests/test_sonar_gate.py` comprueba que nombres con `../` y rutas absolutas
+recibidos desde la API se conservan como contenido y no alteran el destino.
+La prueba y las cuatro verificaciones existentes de políticas aprobaron.

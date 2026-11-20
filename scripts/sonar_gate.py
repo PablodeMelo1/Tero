@@ -37,6 +37,7 @@ def main():
                       headers={'Authorization': 'Basic ' + token})
     with urlopen(request, timeout=30) as response:
         data = json.load(response)
+    # Remote JSON is report content only. It never selects a directory or filename.
     Path('reports').mkdir(exist_ok=True)
     Path('reports/sonar-measures.json').write_text(json.dumps(data, indent=2) + '\n')
     policy = json.loads(Path('.ci/policy.json').read_text())['quality']

@@ -280,3 +280,31 @@ existentes de Go y checkout. El pipeline los bloquea: para obtener una release
 aprobada hay que actualizar esas dependencias y volver a validar, además de
 configurar las cuentas, secretos y destinos. No se agregaron exclusiones para
 ocultar esos hallazgos.
+
+## Mantenimiento de dependencias
+
+Dependabot agrupa propuestas relacionadas y limita los PRs de versiones por
+entrada de configuración. Las migraciones mayores se revisan por separado;
+los controles de Trivy siguen bloqueando HIGH/CRITICAL, incluidos los que no
+tienen parche.
+
+Checkout usa TypeScript directamente para compilar, sin Nest CLI, Webpack ni
+las herramientas de generación que el servicio no utiliza. El lockfile se
+regeneró después de retirarlas. Esto reduce dependencias; queda pendiente
+aprobar un escaneo completo con las versiones corregidas de Go y Nest.
+
+Para regenerar y validar las dependencias pendientes con Python 3, Docker y
+acceso a los registros, desde la raíz del repositorio:
+
+```bash
+bash scripts/remediate-dependencies.sh          # Mostrar la receta
+bash scripts/remediate-dependencies.sh --apply  # Regenerar, probar y escanear
+```
+
+El script trabaja en `.cache/dependency-remediation.*/` y conserva ahí sus
+reportes. Solo copia manifiestos y lockfiles si pasan las pruebas de Go y
+checkout y el escaneo completo de los seis manifiestos. Un reporte incompleto,
+un hallazgo bloqueante o una edición local concurrente impiden la copia.
+No realiza commits ni push. Esta receta todavía no se ejecutó por completo
+en un entorno con acceso a Docker y red; sus controles se probaron con Docker
+simulado en `tests/test_remediation.py`.
