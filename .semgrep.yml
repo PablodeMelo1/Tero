@@ -1,0 +1,42 @@
+rules:
+  - id: js-sql-interpolation
+    languages: [javascript, typescript]
+    message: Use parameterized SQL queries instead of interpolation.
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: $DB.query(`...${$INPUT}...`, ...)
+          - pattern: $DB.query($SQL + $INPUT, ...)
+  - id: js-eval
+    languages: [javascript, typescript]
+    message: Dynamic code evaluation can execute untrusted input.
+    severity: ERROR
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: js-shell-exec
+    languages: [javascript, typescript]
+    message: Use execFile with a fixed executable and separate arguments.
+    severity: ERROR
+    pattern-either:
+      - pattern: exec(...)
+      - pattern: execSync(...)
+  - id: python-eval
+    languages: [python]
+    message: Avoid dynamic code evaluation.
+    severity: ERROR
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+  - id: python-shell
+    languages: [python]
+    message: Pass arguments without invoking a shell.
+    severity: ERROR
+    pattern: subprocess.$METHOD(..., shell=True, ...)
+  - id: go-shell-interpolation
+    languages: [go]
+    message: Do not pass dynamically assembled commands to a shell.
+    severity: ERROR
+    pattern-either:
+      - pattern: exec.Command("sh", "-c", $CMD, ...)
+      - pattern: exec.Command("bash", "-c", $CMD, ...)

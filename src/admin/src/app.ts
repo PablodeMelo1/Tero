@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 import crypto from 'crypto';
 import path from 'path';
 
-const app = express();
+export const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
@@ -151,4 +151,6 @@ app.get('*', (_req: Request, res: Response): void => {
 });
 
 const port = parseInt(process.env.PORT || '8080');
-app.listen(port, () => console.log(`Admin listening on :${port}`));
+if (require.main === module) {
+  app.listen(port, () => console.log(`Admin listening on :${port}`));
+}

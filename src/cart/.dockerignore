@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+test
+tests
+__pycache__
+.pytest_cache
+.coverage
+*.tsbuildinfo
+.yarn/install-state.gz
+.yarn/cache
+.env*

@@ -1,0 +1,177 @@
+name: Tero CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+
+# Main releases remain ordered while production waits for approval.
+concurrency:
+  group: tero-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: Build, tests, quality and source security
+    uses: ./.github/workflows/ci.yml
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  containers:
+    name: Build and scan ${{ matrix.service }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ui, admin, catalog, cart, checkout, orders]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build once and load for scanning
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: src/${{ matrix.service }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          provenance: false
+          tags: tero-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - run: mkdir -p reports
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.1
+      - name: Trivy image security gate
+        env:
+          SERVICE: ${{ matrix.service }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: bash scripts/trivy.sh image "tero-$SERVICE:$RELEASE_SHA" reports/image.json
+      - name: Preserve scanned image
+        env:
+          SERVICE: ${{ matrix.service }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: docker save "tero-$SERVICE:$RELEASE_SHA" -o image.tar
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: container-${{ matrix.service }}
+          path: image.tar
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: scan-${{ matrix.service }}
+          path: reports/
+          retention-days: 30
+
+  integration:
+    name: Integration and purchase E2E
+    needs: containers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: container-*
+          path: .ci-images
+      - name: Load the scanned images
+        run: |
+          for image in .ci-images/container-*/image.tar; do
+            docker load -i "$image"
+          done
+      - name: Test with isolated PostgreSQL and Redis
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: bash scripts/ci-stack.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: integration-reports
+          path: reports/
+          retention-days: 30
+
+  ci-gate:
+    name: Required CI gate
+    if: always()
+    needs: [verify, containers, integration]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Block missing or failed stages
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          jobs = json.loads(os.environ['RESULTS'])
+          if any(job['result'] != 'success' for job in jobs.values()):
+              raise SystemExit('CI failed: publication and deployment are blocked')
+          PY
+
+  publish:
+    name: Publish verified images to Docker Hub
+    needs: ci-gate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: container-*
+          path: .ci-images
+      - name: Load verified images
+        run: |
+          for image in .ci-images/container-*/image.tar; do
+            docker load -i "$image"
+          done
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish without rebuilding
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: python3 scripts/publish.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release
+          path: release/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  dev:
+    name: Deploy Dev
+    needs: publish
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+    secrets: inherit
+
+  test:
+    name: Deploy Test and run E2E + DAST
+    needs: dev
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: test
+    secrets: inherit
+
+  prod:
+    name: Deploy Prod
+    needs: test
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: prod
+    secrets: inherit

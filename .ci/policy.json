@@ -1,0 +1,13 @@
+{
+  "quality": {
+    "minimum_new_coverage": 80,
+    "maximum_new_duplication": 3,
+    "maximum_new_bugs": 0,
+    "maximum_new_vulnerabilities": 0
+  },
+  "security": {
+    "blocked_severities": ["HIGH", "CRITICAL"],
+    "ignore_unfixed": false,
+    "maximum_zap_high_alerts": 0
+  }
+}

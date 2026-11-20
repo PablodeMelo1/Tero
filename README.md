@@ -22,6 +22,17 @@ docker compose up --build
 
 Credenciales del admin por defecto: `admin` / `admin`
 
+## CI/CD
+
+El pipeline de GitHub Actions compila y prueba los seis servicios, aplica los gates
+de SonarCloud, Semgrep, Gitleaks, Checkov y Trivy, publica en Docker Hub y promueve
+las mismas imágenes por digest a **Dev → Test → Prod**. Test ejecuta una compra
+completa y OWASP ZAP; Prod requiere aprobación mediante GitHub Environments.
+
+La configuración de cuentas, secretos, hosts, umbrales y rollback está en
+[la guía de CI/CD](docs/ci-cd.md). Los despliegues usan `deploy/compose.yml`;
+`docker-compose.yml` mantiene el flujo de desarrollo local.
+
 ## Comandos útiles
 
 ```bash
