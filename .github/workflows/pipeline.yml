@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  deployments: read
 
 # Main releases remain ordered while production waits for approval.
 concurrency:
@@ -27,6 +25,9 @@ jobs:
   containers:
     name: Build and scan ${{ matrix.service }}
     needs: verify
+    permissions:
+      contents: read
+      actions: read # BuildKit queries the GitHub Actions cache API.
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -155,6 +156,10 @@ jobs:
   dev:
     name: Deploy Dev
     needs: publish
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
     uses: ./.github/workflows/deploy.yml
     with:
       environment: dev
@@ -163,6 +168,10 @@ jobs:
   test:
     name: Deploy Test and run E2E + DAST
     needs: dev
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
     uses: ./.github/workflows/deploy.yml
     with:
       environment: test
@@ -171,6 +180,10 @@ jobs:
   prod:
     name: Deploy Prod
     needs: test
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
     uses: ./.github/workflows/deploy.yml
     with:
       environment: prod

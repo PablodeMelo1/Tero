@@ -189,6 +189,40 @@ class CoveragePathTests(unittest.TestCase):
             self.assertEqual(report.read_text(), expected)
             self.assertIn('SF:src/ui/src/app.ts', expected)
 
+    def test_lcov_content_cannot_select_the_output_file(self):
+        for service in ('ui', 'admin', 'checkout'):
+            with self.subTest(service=service), project() as root:
+                sentinel = root / 'untouched.txt'
+                sentinel.write_text('must remain unchanged\n')
+                report = root / f'src/{service}/coverage/lcov.info'
+                report.parent.mkdir(parents=True)
+                # LCOV metadata is arbitrary text, not a filesystem destination.
+                metadata = f'TN:../../untouched.txt\nTN:{sentinel}\n'
+                report.write_text(metadata + 'SF:src/app.ts\nDA:1,1\nend_of_record\n')
+                before = {path: path.read_bytes() for path in root.rglob('*') if path.is_file()}
+                self.module.normalize(service)
+                self.assertEqual(set(before), {path for path in root.rglob('*') if path.is_file()})
+                for path, content in before.items():
+                    if path != report:
+                        self.assertEqual(path.read_bytes(), content)
+                self.assertEqual(report.read_text(), metadata + f'SF:src/{service}/src/app.ts\nDA:1,1\nend_of_record\n')
+
+    def test_unsafe_lcov_source_paths_abort_without_overwriting_any_file(self):
+        for service in ('ui', 'admin', 'checkout'):
+            with project() as root:
+                sentinel = root / 'untouched.txt'
+                sentinel.write_text('must remain unchanged\n')
+                report = root / f'src/{service}/coverage/lcov.info'
+                report.parent.mkdir(parents=True)
+                for source in ('../../../untouched.txt', str(sentinel)):
+                    with self.subTest(service=service, source=source):
+                        content = f'SF:{source}\nDA:1,1\nend_of_record\n'
+                        report.write_text(content)
+                        with self.assertRaises(ValueError):
+                            self.module.normalize(service)
+                        self.assertEqual(report.read_text(), content)
+                        self.assertEqual(sentinel.read_text(), 'must remain unchanged\n')
+
     def test_go_normalization_preserves_counts_and_module_prefixes(self):
         for service in ('catalog', 'orders'):
             with project() as root:

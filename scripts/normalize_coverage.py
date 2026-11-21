@@ -25,6 +25,8 @@ def normalize(service):
     root = Path('src') / service
     if service in ('ui', 'admin', 'checkout'):
         report = root / 'coverage/lcov.info'
+        # File content is only the write_text payload, never its destination.
+        # The destination above depends only on the validated service.
         report.write_text(''.join(
             'SF:' + source_path(line[3:].strip(), root) + '\n' if line.startswith('SF:') else line
             for line in report.read_text().splitlines(keepends=True)

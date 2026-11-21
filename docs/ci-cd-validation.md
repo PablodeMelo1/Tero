@@ -90,3 +90,20 @@ bloqueo.
 No se suprimieron reglas ni se bajaron umbrales. Los hallazgos enviados necesitan
 un nuevo análisis para comprobar su cierre; el falso positivo del reporte de
 SonarCloud requiere clasificación en ese servicio con la evidencia anterior.
+
+## Revisión del hallazgo en normalize_coverage.normalize()
+
+Hallazgo: `Path Traversal via file content in normalize_coverage.normalize()`.
+La clasificación recomendada es **False positive**. `report` se construye con
+`src`, un servicio de la lista permitida y el sufijo literal `coverage/lcov.info`;
+ningún dato leído del reporte interviene en ese destino. El argumento de
+`write_text()` es el contenido que se escribe. Además, `source_path()` rechaza
+componentes `..` y rutas absolutas fuera del repositorio en los campos `SF:`.
+
+Dos pruebas de regresión de `CoveragePathTests` verifican los tres servicios
+TypeScript: las rutas en metadatos LCOV permanecen como contenido, solo cambia
+el reporte previsto y los campos `SF:` inválidos abortan sin sobrescribir el
+reporte ni otro archivo. La suite local sin apertura de sockets pasa 40 pruebas.
+No se cambió el comportamiento del normalizador ni se suprimió la regla.
+La clasificación del issue debe realizarse en SonarCloud; estas pruebas no
+modifican su estado remoto.

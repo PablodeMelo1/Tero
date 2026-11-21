@@ -22,11 +22,13 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  deployments: read
 
 jobs:
   deploy:
+    permissions:
+      contents: read
+      actions: read # Read GitHub Environment protection rules.
+      deployments: read
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
