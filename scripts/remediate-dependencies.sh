@@ -7,7 +7,7 @@ if [[ $# -eq 0 ]]; then
 Remediación de dependencias de Tero:
   - Catalog/Orders: actualizar pgx y paquetes golang.org/x afectados.
   - Catalog: actualizar OpenTelemetry, gRPC y compress.
-  - Checkout: alinear Nest 11.2.9 y corregir cuatro transitivas dentro de su major.
+  - Checkout: alinear Nest 11.2.9 y corregir cinco transitivas dentro de su major.
   - Regenerar locks en una copia aislada; ejecutar Go tests, checkout y Trivy.
   - Copiar los seis archivos de dependencias solo si todas las validaciones pasan.
 Ejecutar con --apply en un equipo con Python 3, Docker y acceso a los registros.
@@ -40,6 +40,7 @@ for name in ('@nestjs/common', '@nestjs/core', '@nestjs/platform-express'):
     data['dependencies'][name] = '11.2.9'
 data.setdefault('resolutions', {}).update({
     'body-parser': '2.4.0', 'js-yaml': '4.3.2', 'lodash': '4.18.1', 'proxy-addr': '2.0.8',
+    'path-to-regexp': '8.4.2',
 })
 package.write_text(json.dumps(data, indent=2) + '\n')
 PY
@@ -57,8 +58,8 @@ container() {
     -e YARN_ENABLE_SCRIPTS=false -e YARN_ENABLE_IMMUTABLE_INSTALLS=false \
     "$image" "$@"
 }
-common_go=(github.com/jackc/pgx/v5@v5.9.0 golang.org/x/net@v0.60.0 \
-  golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0)
+common_go=(github.com/jackc/pgx/v5@v5.9.0 golang.org/x/net@v0.62.0 \
+  golang.org/x/crypto@v0.58.0 golang.org/x/text@v0.43.0)
 catalog_go=(github.com/klauspost/compress@v1.18.7 go.opentelemetry.io/otel@v1.47.0 \
   go.opentelemetry.io/otel/sdk@v1.47.0 go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.47.0 \
   go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.47.0 google.golang.org/grpc@v1.83.2)

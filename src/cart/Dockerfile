@@ -1,7 +1,7 @@
 FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS build
 WORKDIR /app
 COPY requirements.lock ./
-RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
+RUN pip install --only-binary=:all: --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
 
 FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337
 WORKDIR /app

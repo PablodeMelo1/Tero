@@ -13,7 +13,12 @@ def enforce(report, maximum):
         raise ValueError(f'ZAP detected {len(alerts)} high-risk alerts')
 
 
-if __name__ == '__main__':
+def main():
     policy = json.loads(Path('.ci/policy.json').read_text())['security']
-    enforce(json.loads(Path(sys.argv[1]).read_text()), policy['maximum_zap_high_alerts'])
+    # Read report content, never a caller-selected filesystem path.
+    enforce(json.load(sys.stdin), policy['maximum_zap_high_alerts'])
     print('DAST gate passed: no high-risk alerts')
+
+
+if __name__ == '__main__':
+    main()

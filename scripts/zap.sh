@@ -16,4 +16,4 @@ if (( status > 2 )); then
   echo "ZAP execution failed (exit $status)" >&2
   exit "$status"
 fi
-python3 scripts/zap_gate.py "$reports/zap-$name.json"
+python3 scripts/zap_gate.py < "$reports/zap-$name.json"

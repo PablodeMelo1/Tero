@@ -88,12 +88,27 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.16'
-      - run: python -m unittest discover -s tests -v
       - name: Validate shell scripts
         run: |
           for script in scripts/*.sh; do bash -n "$script"; done
       - name: Install locked dependencies
-        run: pip install --require-hashes -r src/cart/requirements-dev.lock
+        run: |
+          pip install --only-binary=:all: --require-hashes -r src/cart/requirements-dev.lock
+      - name: Test CI policies and collect script coverage
+        run: |
+          mkdir -p coverage
+          python -m coverage run --rcfile=.ci/coverage.ini -m unittest discover -s tests -v
+          python -m coverage xml --rcfile=.ci/coverage.ini
+          python -m coverage report --rcfile=.ci/coverage.ini
+      - name: Normalize CI coverage paths
+        run: python3 scripts/normalize_coverage.py ci
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: coverage-ci
+          path: coverage/ci-coverage.xml
+          if-no-files-found: error
+          retention-days: 30
       - name: Compile and test cart
         working-directory: src/cart
         env:
@@ -196,7 +211,12 @@ jobs:
         with:
           name: coverage-orders
           path: src/orders
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: coverage-ci
+          path: coverage
       - name: Scan and wait for quality gate
+        id: sonar
         uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -205,6 +225,9 @@ jobs:
             -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
       - name: Enforce repository quality policy
+        # Preserve metrics as evidence when the scanner rejects the remote gate.
+        # A failed scanner still fails this job and the Source checks gate.
+        if: ${{ !cancelled() && (steps.sonar.outcome == 'success' || hashFiles('.scannerwork/report-task.txt') != '') }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}

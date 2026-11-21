@@ -1,5 +1,6 @@
 """Validate a release and emit only immutable Compose image references."""
 import json
+from pathlib import Path
 import re
 import sys
 
@@ -18,6 +19,13 @@ def validate(data, expected_sha):
     return '\n'.join(f'IMAGE_{s.upper()}={data["images"][s]}' for s in SERVICES) + '\n'
 
 
+def main():
+    # Releases always contain this file; CLI input can only supply the commit.
+    if len(sys.argv) != 2:
+        raise ValueError('Usage: manifest.py EXPECTED_SHA (reads ./manifest.json)')
+    with Path('manifest.json').open(encoding='utf-8') as stream:
+        print(validate(json.load(stream), sys.argv[1]), end='')
+
+
 if __name__ == '__main__':
-    with open(sys.argv[1], encoding='utf-8') as stream:
-        print(validate(json.load(stream), sys.argv[2]), end='')
+    main()

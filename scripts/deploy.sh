@@ -11,7 +11,7 @@ mkdir -p "$root" reports
 exec 9>"$root/deploy.lock"
 flock -w 600 9
 
-python3 scripts/manifest.py manifest.json "${RELEASE_SHA:?Missing RELEASE_SHA}" > images.env
+python3 scripts/manifest.py "${RELEASE_SHA:?Missing RELEASE_SHA}" > images.env
 compose() {
   docker compose --project-name "tero-$environment" --env-file "$root/.env" \
     --env-file "$1/images.env" -f "$1/deploy/compose.yml" "${@:2}"

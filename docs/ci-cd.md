@@ -87,9 +87,21 @@ aprobación. El primer análisis necesita una definición válida del período d
 código nuevo en SonarCloud. La cobertura total actual es una línea base; no se
 afirma que la aplicación existente tenga 80 % de cobertura global.
 
+El scanner de Cloud descubre los archivos del repositorio. Las pruebas siguen
+analizadas, pero se excluyen de los cálculos de cobertura y duplicación mediante
+`sonar.coverage.exclusions` y `sonar.cpd.exclusions`. La cobertura de los scripts
+Python se genera con `.ci/coverage.ini`, se transporta en el artifact `coverage-ci`
+y se importa junto con la de Cart. La normalización conserva rutas relativas al
+repositorio y admite ejecutarse nuevamente sin duplicar prefijos. Si el scanner
+rechaza el gate después de enviar el análisis, igualmente se intenta guardar
+`reports/sonar-measures.json`; el fallo del scanner sigue bloqueando la promoción.
+
 ZAP ejecuta un escaneo pasivo y anónimo: no reemplaza un pentest ni prueba las
 rutas autenticadas del admin. Se conservan los reportes y se bloquean los hallazgos
 High; Low/Medium quedan visibles. El gate ejecutable de dependencias es Trivy.
+`zap_gate.py` recibe JSON por entrada estándar; `manifest.py EXPECTED_SHA` lee
+únicamente `manifest.json` en el directorio de la release. Los llamadores de CI
+y del despliegue usan esas interfaces, sin rutas libres como argumentos Python.
 
 ## Configuración inicial de GitHub y Docker Hub
 

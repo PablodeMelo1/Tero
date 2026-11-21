@@ -52,7 +52,7 @@ jobs:
           name: release
           path: .
       - name: Validate release identity
-        run: python3 scripts/manifest.py manifest.json "$RELEASE_SHA" > images.env
+        run: python3 scripts/manifest.py "$RELEASE_SHA" > images.env
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
