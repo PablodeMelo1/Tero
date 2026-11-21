@@ -1,0 +1,8 @@
+{
+  "branch": "main",
+  "environments": {
+    "dev": {"require_review": false},
+    "test": {"require_review": false},
+    "prod": {"require_review": true}
+  }
+}

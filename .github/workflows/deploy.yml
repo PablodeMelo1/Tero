@@ -1,0 +1,117 @@
+name: Reusable environment deployment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      SSH_PRIVATE_KEY:
+        required: false
+      SSH_KNOWN_HOSTS:
+        required: false
+      DEPLOY_HOST:
+        required: false
+      DEPLOY_USER:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    permissions:
+      contents: read
+      actions: read # Read GitHub Environment protection rules.
+      deployments: read
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      TARGET_ENV: ${{ inputs.environment }}
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate environment
+        run: |
+          case "$TARGET_ENV" in dev|test|prod) ;; *) exit 1 ;; esac
+      - name: Verify branch restrictions and production approval rules
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/github_environments.py check "$TARGET_ENV"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release
+          path: .
+      - name: Validate release identity
+        run: python3 scripts/manifest.py "$RELEASE_SHA" > images.env
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Rescan promoted digests against current vulnerability database
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.1
+      - name: Promotion security gate
+        run: |
+          mkdir -p reports
+          while IFS='=' read -r service image; do
+            bash scripts/trivy.sh image "$image" "reports/$service.json"
+          done < images.env
+      - name: Configure SSH with a pinned host key
+        id: ssh
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          : "${SSH_PRIVATE_KEY:?Configure SSH_PRIVATE_KEY in this environment}"
+          : "${SSH_KNOWN_HOSTS:?Configure SSH_KNOWN_HOSTS in this environment}"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+      - name: Upload release and deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          remote="tero/$TARGET_ENV/releases/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "mkdir -p '$remote'"
+          tar -czf release.tar.gz deploy scripts .ci init-db.sql manifest.json
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes release.tar.gz "$target:$remote/release.tar.gz"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            "cd '$remote' && tar -xzf release.tar.gz && RELEASE_SHA='$RELEASE_SHA' bash scripts/deploy.sh '$TARGET_ENV' \"\$HOME/tero/$TARGET_ENV\""
+      - name: Collect deployment evidence
+        if: ${{ always() && steps.ssh.outcome == 'success' }}
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          scp -r -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST:tero/$TARGET_ENV/releases/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/reports" \
+            reports/deployment
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: deployment-${{ inputs.environment }}
+          path: reports/
+          retention-days: 90
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
