@@ -107,3 +107,18 @@ reporte ni otro archivo. La suite local sin apertura de sockets pasa 40 pruebas.
 No se cambió el comportamiento del normalizador ni se suprimió la regla.
 La clasificación del issue debe realizarse en SonarCloud; estas pruebas no
 modifican su estado remoto.
+
+## Revisión del fallo de Containers
+
+En la ejecución [44846563637](https://github.com/PablodeMelo1/Tero/actions/runs/44846563637)
+del commit `05bb3ad`, pasaron los tests de los seis servicios, SonarCloud,
+Semgrep, Gitleaks, Trivy de dependencias y Checkov. Los seis builds Docker
+también pasaron. Los seis jobs Containers fallaron después, al invocar el
+escáner de imágenes: `FATAL unknown flag: --include-dev-deps`.
+
+`scripts/trivy.sh` ahora agrega ese argumento únicamente en modo `fs`.
+Las pruebas de regresión usan una CLI simulada que rechaza esa opción para
+`image`, verifican que se mantiene en `fs` y que tanto los hallazgos como los
+errores del escáner bloquean ambos modos. Se conservan HIGH/CRITICAL y el bloqueo
+de vulnerabilidades sin arreglo. Falta validar el escaneo real de imágenes en
+la siguiente ejecución; este fallo anterior ocurrió antes de analizar CVEs.
