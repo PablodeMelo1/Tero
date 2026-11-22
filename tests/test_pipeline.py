@@ -80,9 +80,15 @@ class TrivyCommandTests(unittest.TestCase):
             '#!/usr/bin/env python3\n'
             'import json, os, pathlib, sys\n'
             'args = sys.argv[1:]\n'
+            'if args[0] == "convert":\n'
+            '    pathlib.Path("conversion.json").write_text(json.dumps(args))\n'
+            '    print("CVE-test: HIGH fixture-package 1.0 -> 1.1")\n'
+            '    raise SystemExit(int(os.environ.get("TRIVY_TEST_CONVERT_STATUS", "0")))\n'
             'if args[0] == "image" and "--include-dev-deps" in args:\n'
             '    raise SystemExit("unknown flag: --include-dev-deps")\n'
             'pathlib.Path("arguments.json").write_text(json.dumps(args))\n'
+            'if not os.environ.get("TRIVY_TEST_NO_REPORT"):\n'
+            '    pathlib.Path(args[args.index("--output") + 1]).write_text("{}")\n'
             'raise SystemExit(int(os.environ.get("TRIVY_TEST_STATUS", "0")))\n')
         (binary / 'trivy').chmod(0o755)
         self.env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'])
@@ -102,6 +108,8 @@ class TrivyCommandTests(unittest.TestCase):
         args = self.arguments()
         self.assertEqual(args[0], 'image')
         self.assertNotIn('--include-dev-deps', args)
+        self.assertNotIn('--file-patterns', args)
+        self.assertNotIn('--skip-dirs', args)
         self.assertEqual(args[-1], target)
         self.assertEqual(args[args.index('--severity') + 1], 'HIGH,CRITICAL')
         self.assertIn('--ignore-unfixed=false', args)
@@ -114,6 +122,8 @@ class TrivyCommandTests(unittest.TestCase):
         result = self.scan('fs', 'source tree')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--include-dev-deps', self.arguments())
+        pattern = self.arguments()[self.arguments().index('--file-patterns') + 1]
+        self.assertEqual(pattern, r'pip:(^|/)requirements(-dev)?\.lock$')
         self.assertEqual(self.arguments()[-1], 'source tree')
 
     def test_vulnerabilities_and_scanner_errors_block_both_modes(self):
@@ -121,6 +131,23 @@ class TrivyCommandTests(unittest.TestCase):
             for status in (1, 2):
                 with self.subTest(mode=mode, status=status):
                     self.assertEqual(self.scan(mode, 'target', status).returncode, status)
+
+    def test_findings_are_printed_from_json_without_rerunning_the_scan(self):
+        result = self.scan('image', 'target', 1)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('CVE-test: HIGH fixture-package', result.stdout)
+        conversion = json.loads((self.root / 'conversion.json').read_text())
+        self.assertEqual(conversion, ['convert', '--format', 'table', '--scanners', 'vuln', 'reports/scan.json'])
+        self.assertEqual(self.arguments()[0], 'image')
+
+    def test_scanner_failure_without_report_is_not_converted_or_hidden(self):
+        self.env['TRIVY_TEST_NO_REPORT'] = '1'
+        self.assertEqual(self.scan('image', 'target', 2).returncode, 2)
+        self.assertFalse((self.root / 'conversion.json').exists())
+
+    def test_report_conversion_failure_still_fails_the_gate(self):
+        self.env['TRIVY_TEST_CONVERT_STATUS'] = '2'
+        self.assertNotEqual(self.scan('image', 'target').returncode, 0)
 
     def test_unsupported_mode_never_runs_trivy(self):
         self.assertNotEqual(self.scan('invalid', 'target').returncode, 0)

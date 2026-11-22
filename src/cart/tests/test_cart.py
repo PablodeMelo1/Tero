@@ -33,3 +33,26 @@ def test_merge_preserves_customer_items_and_removes_session():
     assert service.get_items('session') == []
     service.delete('customer')
     assert service.get_items('customer') == []
+
+
+def test_health_and_metrics_remain_available_after_framework_upgrade():
+    with TestClient(app) as client:
+        assert client.get('/health').json() == {'status': 'UP'}
+        metrics = client.get('/metrics')
+        assert metrics.status_code == 200
+        assert 'http_requests_total' in metrics.text
+
+
+def test_lifespan_initializes_selected_postgres_provider(monkeypatch):
+    from unittest.mock import Mock
+    from app.config import settings
+    from app import postgres_service
+
+    provider = Mock()
+    factory = Mock(return_value=provider)
+    monkeypatch.setattr(settings, 'cart_persistence_provider', 'postgres')
+    monkeypatch.setattr(postgres_service, 'PostgresCartService', factory)
+    with TestClient(app) as client:
+        factory.assert_called_once_with()
+        assert app.state.cart_service is provider
+        assert client.get('/health').status_code == 200

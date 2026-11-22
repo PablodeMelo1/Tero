@@ -1,9 +1,13 @@
-FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS build
+FROM python:3.12-alpine3.23@sha256:9a7b46da82fe49a9118e0aa7e35ac3b831aa53ad4f4ebf3e16654732bc958a62 AS runtime-base
+# The pinned base contains krb5-libs 1.22.1; require the patched package.
+RUN apk add --no-cache 'krb5-libs>=1.22.3-r0'
+
+FROM runtime-base AS build
 WORKDIR /app
 COPY requirements.lock ./
 RUN pip install --only-binary=:all: --no-cache-dir --require-hashes --prefix=/install -r requirements.lock
 
-FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337
+FROM runtime-base
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8080
 COPY --from=build /install /usr/local

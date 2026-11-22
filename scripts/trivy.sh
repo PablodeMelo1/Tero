@@ -10,8 +10,14 @@ mkdir -p "$(dirname "$report")"
 # Development dependency discovery applies to source manifests, not images.
 mode_options=()
 if [[ "$mode" == fs ]]; then
-  mode_options+=(--include-dev-deps)
+  mode_options+=(--include-dev-deps --file-patterns 'pip:(^|/)requirements(-dev)?\.lock$'
+    --skip-dirs '**/node_modules,**/.yarn,**/dist,**/coverage,.cache,.ci-images,.git')
 fi
+scan_status=0
 trivy "$mode" "${mode_options[@]}" --scanners vuln --severity "$severity" --ignore-unfixed="$ignore_unfixed" \
-  --exit-code 1 --format json --output "$report" \
-  --skip-dirs '**/node_modules,**/.yarn,**/dist,**/coverage,.ci-images,.git' "$target"
+  --exit-code 1 --format json --output "$report" "$target" || scan_status=$?
+# Show the saved findings without scanning again; preserve the gate's exit code.
+if [[ -s "$report" ]]; then
+  trivy convert --format table --scanners vuln "$report"
+fi
+exit "$scan_status"

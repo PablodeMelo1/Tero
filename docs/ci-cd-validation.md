@@ -122,3 +122,83 @@ Las pruebas de regresión usan una CLI simulada que rechaza esa opción para
 errores del escáner bloquean ambos modos. Se conservan HIGH/CRITICAL y el bloqueo
 de vulnerabilidades sin arreglo. Falta validar el escaneo real de imágenes en
 la siguiente ejecución; este fallo anterior ocurrió antes de analizar CVEs.
+
+## Hallazgos reales de imágenes — 21/11/2026
+
+La ejecución [44860905857](https://github.com/PablodeMelo1/Tero/actions/runs/44860905857)
+del commit `e09e5f5` confirmó que SonarCloud, tests, Checkov y seguridad de código
+pasan. Los seis builds también pasan. El gate de imágenes ahora completa el
+escaneo y bloquea por vulnerabilidades; sus artifacts `scan-*` se descargaron
+en `.cache/container-scans/44860905857/` para revisar los JSON completos.
+
+| Imágenes | Hallazgos HIGH/CRITICAL |
+|---|---|
+| UI, Admin, Checkout, Catalog y Orders | 40 por imagen en paquetes Debian 12; 38 sin parche informado |
+| Cart | 103 en Debian 12 (101 sin parche) y 3 en Starlette 0.38.6 |
+
+Los tres hallazgos de Starlette son CVE-2024-47874, CVE-2026-48818 y
+CVE-2026-54283; el mayor mínimo corregido informado es 1.3.1. Se preparó la
+actualización compatible de FastAPI e Instrumentator y la migración de arranque
+a lifespan.
+
+El scanner de filesystem ahora incluye explícitamente `requirements.lock` y
+`requirements-dev.lock` mediante `--file-patterns`: antes solo detectaba el
+`requirements.txt` de dependencias directas. Las exclusiones de directorios de
+fuente se limitan a `fs`, para que las imágenes también analicen los paquetes
+instalados en `node_modules`. El JSON se convierte a tabla en el log sin un
+segundo escaneo y se conserva el código de salida original. 47 pruebas locales
+sin apertura de sockets aprobaron; incluyen evidencia visible, rechazo por
+hallazgos y errores de ejecución/conversión. La política no se relajó.
+
+La ejecución real de `.cache/update-cart-dependencies.sh` produjo
+`.cache/cart-remediation.TWEGKQ/`: ambos locks locales coinciden con los generados
+en esa copia, sus pruebas de Cart aprobaron antes de copiar y el reporte de
+dependencias del 21/11/2026 a las 16:54 UTC tiene cero HIGH/CRITICAL. Las versiones
+aplicadas son FastAPI 0.137.2, Starlette 1.3.1 e Instrumentator 8.1.0. La cobertura
+total de Cart en ese reporte es 59.9 %; el umbral de SonarCloud se aplica al código
+nuevo y debe confirmarse con el siguiente análisis.
+
+Se revisaron los seis reportes reales de `.cache/base-image-scans/`, generados
+entre 16:50 y 16:52 UTC, junto con sus digests de `imagetools inspect`:
+
+| Base candidata | HIGH/CRITICAL | Decisión aplicada |
+|---|---|---|
+| Distroless static Debian 13 nonroot | 0 | Runtime de Catalog/Orders con compilación `CGO_ENABLED=0` |
+| Node 22 Alpine 3.23 | 10, todos dentro de npm | Base de UI/Admin/Checkout; npm, Corepack y Yarn se eliminan físicamente de la etapa final |
+| Python 3.12 Alpine 3.23 | 16 en krb5-libs 1.22.1-r0 | Base de Cart; se exige instalar krb5-libs >= 1.22.3-r0 |
+| Node 22 slim trixie | 59 | No se seleccionó |
+| Python 3.12 slim trixie | 51 | No se seleccionó |
+| Distroless Node 22 Debian 13 nonroot | 1 sin parche en libssl3t64 | No se seleccionó |
+
+Las nuevas bases externas están fijadas por los digests observados. Los servicios
+Node conservan los gestores de paquetes en las etapas de build y sus dependencias
+de producción en `/app/node_modules`. Go conserva su healthcheck ejecutable y
+usuarios sin privilegios. El mantenimiento de Checkout usa `sh`, disponible en
+Alpine, para regenerar locks. Se validaron las seis imágenes completas y la
+integración real después de aplicar la corrección adicional de Go indicada abajo.
+
+La primera comprobación de imágenes finales (`.cache/container-validation.Mq1twf/`)
+aprobó UI, Admin y Checkout con cero HIGH/CRITICAL, incluidos sus paquetes Node
+instalados. Catalog y Orders detectaron CVE-2026-97054 en la biblioteca estándar
+Go 1.26.10. Se actualizó a 1.26.11 el builder fijado por digest, los dos `go.mod`,
+el job Go de CI y la receta de mantenimiento. El digest del builder se verificó
+en los [metadatos oficiales de Docker Library](https://github.com/docker-library/repo-info/blob/master/repos/golang/remote/1.26.11-bookworm.md).
+Cart también aprobó su build sobre musl y el escaneo de su imagen final con cero
+HIGH/CRITICAL. El reporte de dependencias y los 18 controles Checkov aprobaron.
+La comprobación final `.cache/container-validation.OszCBO/` del 21/11/2026
+reconstruyó los binarios con Go 1.26.11 y terminó aprobada:
+
+| Verificación final | Resultado |
+|---|---|
+| Builds Docker | Los seis servicios compilan |
+| Trivy de imágenes | Cero HIGH/CRITICAL en las seis imágenes finales |
+| Trivy de dependencias | Cero HIGH/CRITICAL en los ocho manifiestos/locks detectados, incluidos ambos locks Python |
+| Checkov | 18 controles aprobados, cero fallos |
+| Integración con PostgreSQL/Redis | Stack healthy y smoke tests aprobados |
+| Compra E2E | Catálogo → carrito → checkout → orden persistida aprobada |
+| Integridad de la evidencia | Todos los hashes de entradas coinciden con los archivos actuales |
+
+`success.json` y los siete reportes de Trivy de esa copia confirman el resultado.
+Los temporales y reportes siguen excluidos de Git. Falta subir el commit y
+confirmar el pipeline remoto sobre ese nuevo SHA; no se publicaron imágenes ni
+se ejecutaron despliegues remotos durante esta validación local.

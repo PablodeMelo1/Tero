@@ -63,16 +63,17 @@ common_go=(github.com/jackc/pgx/v5@v5.9.0 golang.org/x/net@v0.62.0 \
 catalog_go=(github.com/klauspost/compress@v1.18.7 go.opentelemetry.io/otel@v1.47.0 \
   go.opentelemetry.io/otel/sdk@v1.47.0 go.opentelemetry.io/otel/exporters/otlp/otlptrace@v1.47.0 \
   go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp@v1.47.0 google.golang.org/grpc@v1.83.2)
-go_commands='go get go@1.26.0 toolchain@go1.26.10 "$@" && go mod tidy && go test -mod=readonly -race ./...'
+go_commands='go get go@1.26.0 toolchain@go1.26.11 "$@" && go mod tidy && go test -mod=readonly -race ./...'
 container catalog "$go_image" bash -c "$go_commands" remediation "${common_go[@]}" "${catalog_go[@]}"
 container orders "$go_image" bash -c "$go_commands" remediation "${common_go[@]}"
-container checkout "$node_image" bash -c \
+container checkout "$node_image" sh -c \
   'node .yarn/releases/yarn-4.11.0.cjs install && node .yarn/releases/yarn-4.11.0.cjs install --immutable && npm test'
 severity=$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1]))["security"]["blocked_severities"]))' "$stage/.ci/policy.json")
 ignore_unfixed=$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["security"]["ignore_unfixed"]).lower())' "$stage/.ci/policy.json")
 docker run --rm --platform linux/amd64 --user "$(id -u):$(id -g)" \
   -v "$stage:/work" -w /work -e TRIVY_CACHE_DIR=/tmp/trivy aquasec/trivy:0.76.1 \
   fs --include-dev-deps --scanners vuln --severity "$severity" --ignore-unfixed="$ignore_unfixed" \
+  --file-patterns 'pip:(^|/)requirements(-dev)?\.lock$' \
   --exit-code 1 --format json --output /work/reports/dependencies.json \
   --skip-dirs '**/node_modules,**/.yarn,**/dist,**/coverage' /work
 python3 - "$root" "$stage" <<'PY'
@@ -80,7 +81,7 @@ import hashlib, json, pathlib, sys
 root, stage = map(pathlib.Path, sys.argv[1:])
 report = json.loads((stage / 'reports/dependencies.json').read_text())
 required = {'src/admin/package-lock.json', 'src/ui/package-lock.json',
-            'src/cart/requirements.txt', 'src/catalog/go.mod',
+            'src/cart/requirements.lock', 'src/catalog/go.mod',
             'src/orders/go.mod', 'src/checkout/yarn.lock'}
 results = report['Results']
 missing = {name for name in required if not any(str(r.get('Target', '')).endswith(name) for r in results)}

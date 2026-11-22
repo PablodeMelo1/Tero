@@ -28,7 +28,7 @@ else:
     if mode == 'fail':
         raise SystemExit(1)
     results = [{'Target': '/work/' + name, 'Vulnerabilities': []} for name in (
-        'src/admin/package-lock.json', 'src/ui/package-lock.json', 'src/cart/requirements.txt',
+        'src/admin/package-lock.json', 'src/ui/package-lock.json', 'src/cart/requirements.lock',
         'src/catalog/go.mod', 'src/orders/go.mod', 'src/checkout/yarn.lock')]
     if mode == 'incomplete':
         results.pop()

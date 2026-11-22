@@ -2,7 +2,7 @@ module retail-store/orders
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/gin-gonic/gin v1.10.1

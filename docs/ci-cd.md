@@ -99,6 +99,10 @@ rechaza el gate después de enviar el análisis, igualmente se intenta guardar
 ZAP ejecuta un escaneo pasivo y anónimo: no reemplaza un pentest ni prueba las
 rutas autenticadas del admin. Se conservan los reportes y se bloquean los hallazgos
 High; Low/Medium quedan visibles. El gate ejecutable de dependencias es Trivy.
+Su escaneo de código reconoce ambos locks Python además de los manifiestos
+habituales. El escaneo de imágenes incluye las dependencias instaladas, sin
+excluir `node_modules`. Los hallazgos se guardan en JSON y también se muestran
+como tabla en el log; el estado del gate conserva el resultado del escaneo.
 `zap_gate.py` recibe JSON por entrada estándar; `manifest.py EXPECTED_SHA` lee
 únicamente `manifest.json` en el directorio de la release. Los llamadores de CI
 y del despliegue usan esas interfaces, sin rutas libres como argumentos Python.
@@ -222,6 +226,12 @@ Actions conserva cobertura, reportes de calidad/seguridad y logs de integración
 por 30 días; manifiesto y evidencias de despliegue por 90 días; imágenes temporales
 para mover entre jobs por 7 días. El binario de cada servicio se publica dentro de
 su imagen. Los contenedores finales usan usuario no root y healthchecks.
+Catalog y Orders compilan sin CGO y ejecutan en distroless static. UI, Admin y
+Checkout usan Node 22 sobre Alpine y ejecutan directamente Node; npm, Corepack y
+Yarn quedan en las etapas de build. Cart usa Python 3.12 sobre Alpine con el
+paquete Kerberos corregido y locks Python con hashes. Los digests de las bases
+se verifican antes de cambiarlos; las imágenes completas deben aprobar Trivy y
+la integración con PostgreSQL y Redis.
 
 ## Verificación local
 
@@ -237,7 +247,7 @@ node .yarn/releases/yarn-4.11.0.cjs install --immutable
 npm test
 ```
 
-Desde la raíz, usando Python 3.12 y Go 1.26.10:
+Desde la raíz, usando Python 3.12 y Go 1.26.11:
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -296,8 +306,9 @@ bloqueando HIGH/CRITICAL, incluidos los que no tienen parche.
 
 Checkout usa TypeScript directamente para compilar, sin Nest CLI, Webpack ni
 las herramientas de generación que el servicio no utiliza. El lockfile se
-regeneró después de retirarlas. Esto reduce dependencias; queda pendiente
-aprobar un escaneo completo con las versiones corregidas de Go y Nest.
+regeneró después de retirarlas. Esto reduce dependencias; las versiones corregidas
+de Go y Nest aprobaron el gate de dependencias en GitHub. Los locks Python también
+se analizan para incluir sus dependencias transitivas.
 
 Para regenerar y validar las dependencias pendientes con Python 3, Docker y
 acceso a los registros, desde la raíz del repositorio:
