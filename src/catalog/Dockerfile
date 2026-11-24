@@ -1,7 +1,14 @@
-FROM golang:1.24
+FROM golang:1.26.11-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0 AS build
 WORKDIR /app
-COPY . .
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go build -o catalog .
+COPY . .
+RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags="-s -w" -o /out/catalog .
+
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931
+WORKDIR /app
+COPY --from=build /out/catalog /app/catalog
+USER 65532:65532
 EXPOSE 8080
-CMD ["./catalog"]
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=12 CMD ["/app/catalog", "--healthcheck"]
+CMD ["/app/catalog"]

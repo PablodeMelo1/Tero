@@ -40,6 +40,16 @@ import (
 // @BasePath /
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--healthcheck" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		if !checkHealth("http://127.0.0.1:" + port + "/health") {
+			os.Exit(1)
+		}
+		return
+	}
 	ctx := context.Background()
 
 	_, otelPresent := os.LookupEnv("OTEL_SERVICE_NAME")
@@ -162,4 +172,14 @@ func initTracer(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetTracerProvider(tp)
 	return tp, nil
+}
+
+// checkHealth supports container probes without a shell or an extra HTTP client binary.
+func checkHealth(endpoint string) bool {
+	response, err := (&http.Client{Timeout: 4 * time.Second}).Get(endpoint)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	return response.StatusCode == http.StatusOK
 }

@@ -1,19 +1,23 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.config import settings
 from app.router import router
 
-app = FastAPI(title="Cart Service")
 
-
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(application: FastAPI):
     if settings.cart_persistence_provider == "postgres":
         from app.postgres_service import PostgresCartService
-        app.state.cart_service = PostgresCartService()
+        application.state.cart_service = PostgresCartService()
     else:
         from app.service import InMemoryCartService
-        app.state.cart_service = InMemoryCartService()
+        application.state.cart_service = InMemoryCartService()
+    yield
+
+
+app = FastAPI(title="Cart Service", lifespan=lifespan)
 
 
 @app.get("/topology")

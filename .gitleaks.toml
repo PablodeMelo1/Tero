@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated reports, dependencies and vendored Yarn binary"
+paths = ['''(^|/)(node_modules|dist|coverage|reports|\.yarn|\.git)/''']

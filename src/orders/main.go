@@ -58,6 +58,16 @@ type CreateOrderRequest struct {
 var db *gorm.DB
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--healthcheck" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		if !checkHealth("http://127.0.0.1:" + port + "/health") {
+			os.Exit(1)
+		}
+		return
+	}
 	dsn := buildDSN()
 
 	var err error
@@ -156,4 +166,14 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// checkHealth supports container probes without a shell or an extra HTTP client binary.
+func checkHealth(endpoint string) bool {
+	response, err := (&http.Client{Timeout: 4 * time.Second}).Get(endpoint)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	return response.StatusCode == http.StatusOK
 }
